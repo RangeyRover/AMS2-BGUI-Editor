@@ -96,11 +96,4 @@ When saving, the file must be written in this strict order:
 *   **Compatibility**: Support "Bentley", "Cart", and non-standard magic header variants (with warnings).
 *   **Performance**: Handle files with 100+ containers efficiently.
 
-## 6. Gap Analysis (vs `bgui-editor25.py`)
-| Feature | Old Editor (v25) | New Editor Requirements |
-| :--- | :--- | :--- |
-| **Scope** | Head Section Only | **Full File** (Head + Containers + Register) |
-| **BGUI Format** | Heuristic (Pattern Scan) | **Structured Parser** (Register-driven) |
-| **Container Editing**| None | **Full CRUD** (Create, Read, Update, Delete) |
-| **Hierarchy** | None | **Register-based Tree** |
-| **Cart Support** | Unknown | **Explicit Support** (Preserve Unknown Data) |
+
