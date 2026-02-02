@@ -24,17 +24,17 @@ graph TD
     subgraph Physical_Layout ["File Layout (Linear)"]
         direction TB
         Magic([Magic Header]) --> HeaderData
-        HeaderData[Header Parsing] --> |"01 Markers"| Proj[Project & Sprites]
-        HeaderData --> |"03 Markers"| Man[Manifest (ID:0)]
-        Man --> ContData[Container Data Block]
-        ContData --> |"03/04 Regex Scan"| ContList[List of Containers]
-        ContList --> RegSig[Register Signature]
-        RegSig --> |"Backward Scan"| Register[Register Table]
+        HeaderData["Header Parsing"] --> |"01 Markers"| Proj["Project & Sprites"]
+        HeaderData --> |"03 Markers"| Man["Manifest (ID:0)"]
+        Man --> ContData["Container Data Block"]
+        ContData --> |"03/04 Regex Scan"| ContList["List of Containers"]
+        ContList --> RegSig["Register Signature"]
+        RegSig --> |"Backward Scan"| Register["Register Table"]
     end
     subgraph Logical_Construction ["Logical Reconstruction"]
-        Register --> |"Defines Topology"| TreeBuild[Tree Builder]
+        Register --> |"Defines Topology"| TreeBuild["Tree Builder"]
         ContList --> |"Provides Properties"| TreeBuild
-        TreeBuild --> |"Outputs"| VisualTree[UI Hierarchy]
+        TreeBuild --> |"Outputs"| VisualTree["UI Hierarchy"]
     end
     Man -.-> |"Keys"| VisualTree
     style Magic fill:#f9f,stroke:#333
