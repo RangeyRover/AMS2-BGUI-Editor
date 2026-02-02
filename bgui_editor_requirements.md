@@ -26,7 +26,7 @@ The goal is to develop a comprehensive BGUI Editor that surpasses the limitation
     *   **Direct Editing**: Allow users to edit the hex bytes directly.
     *   **Warning**: Display a warning when editing starts ("Unstructured edit").
     *   **Section Highlighting**: Clicking top-level nodes highlights their full byte range.
-    *   **Precise Highlighting**: Highlighting MUST be applied only to the specific hex bytes (and corresponding ASCII) of the selection, avoiding entire row selection that includes offsets/separators.
+    *   **Precise Highlighting**: Highlighting MUST be applied only to the specific hex bytes of the decoded field (e.g. the exact resource string bytes found by the parser).
     *   **Zoom/Highlight**: Sync with tree selection (auto-scroll to container data).
 *   **Tree View**: Display the hierarchy defined by the Register (Parent-Child relationships).
 *   **File Hierarchy**:
@@ -57,7 +57,7 @@ The goal is to develop a comprehensive BGUI Editor that surpasses the limitation
 ### 2.6 Live Property Editing
 *   **Hex Sync**: Property edits MUST update the hex view immediately after applying.
 *   **Length Auto-Calculation**: For length-prefixed strings (Name, Resource), lengths MUST be automatically calculated and displayed when strings are edited.
-*   **Length Display**: Properties panel MUST show current Name Length, Resource Block Length (fixed 189), and Resource String Length (inner) as read-only fields.
+*   **Length Display**: Properties panel MUST show current Name Length and Resource String Length as read-only fields with their hex offsets.
 
 ## 3. Data Structure Rules (based on `bgui_format.md`)
 
@@ -66,14 +66,14 @@ The editor **MUST** adhere to the validated container structure:
 *   **Logical Start**: 8 bytes before Marker.
 *   **Offset Tracking**: Capture `File Offset` and `Byte Length`.
 *   **Subsection Count**: Start + 3 (Also synced from Register).
-*   **Marker**: `03 00 00 00` at Start + 4.
+*   **Marker**: `03` or `04`.
 *   **Name Length**: Start + 8.
 *   **Name String**: Variable length, no null terminator.
 *   **Padding**: 4 bytes after Name.
 *   **Anchor ID**: `u32` at `NameEnd + 4`.
 *   **Properties**: Fixed offsets from ID (`X`+4, `Y`+8, `Size`+12, `Color`+16).
 *   **Unknown Data**: 44 bytes at `ID + 20` must be preserved.
-*   **Resource Block**: At `ID + 64`. Fixed 189 bytes. Contains nested structure: `[Flags (5b)][Inner Len (1b)][String][Padding]`.
+*   **Resource Property**: Tagged by `BD 00 00 00`. Scanned dynamically within container bounds.
 
 ### 3.2 File Assembly
 When saving, the file must be written in this strict order:
@@ -96,4 +96,11 @@ When saving, the file must be written in this strict order:
 *   **Compatibility**: Support "Bentley", "Cart", and non-standard magic header variants (with warnings).
 *   **Performance**: Handle files with 100+ containers efficiently.
 
-
+## 6. Gap Analysis (vs `bgui-editor25.py`)
+| Feature | Old Editor (v25) | New Editor Requirements |
+| :--- | :--- | :--- |
+| **Scope** | Head Section Only | **Full File** (Head + Containers + Register) |
+| **BGUI Format** | Heuristic (Pattern Scan) | **Structured Parser** (Register-driven) |
+| **Container Editing**| None | **Full CRUD** (Create, Read, Update, Delete) |
+| **Hierarchy** | None | **Register-based Tree** |
+| **Cart Support** | Unknown | **Explicit Support** (Preserve Unknown Data) |

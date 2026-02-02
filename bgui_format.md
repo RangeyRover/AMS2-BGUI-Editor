@@ -12,23 +12,32 @@ The file consists of three main sections:
 
 ---
 
-## 2. Register (End of File)
-Located at the very end. The authoritative tree structure definition.
-
-### 2.1 Identification
-Scan **backwards** from EOF for the 14-byte signature:
-`0E 00 00 00 00 00 00 00 00 00 00 00 00 00`
-
-### 2.2 Structure
-Data following the signature consists of 8-byte entries (pairs of u32).
-*   **Capacity**: `(FileEnd - SignatureEnd) / 8` entries.
-
 | Offset | Type | Name | Description |
 | :--- | :--- | :--- | :--- |
 | `+0` | `u32` | **Container ID** | Unique ID linking to Container Data. |
 | `+4` | `u32` | **Child Count** | Number of subsections/children for this node. |
 
 ---
+
+## 2. Head Section & Markers
+The file begins with a header section containing `01` markers and the Manifest (ID:0).
+
+### `01` Markers
+- **Sprite Pointer**: The first `01` marker typically marks the sprite path (e.g., `gui\displaysprites6.bspr`).
+- **Project Container (ID:1)**: The second `01` marker (name "Container") defines **Container 1**.
+    - It acts as the root of the standard container hierarchy.
+    - Its physical location is in the header, but its children may be anywhere in the file.
+
+### Container 0 (The Manifest)
+- **Marker**: `03 00 00 00`
+- **Name**: Empty (Length 0).
+- **Structure**:
+    - `Offset + 0`: Marker (03)
+    - `Offset + 4`: Name Length (00)
+    - `Offset + 5`: **String Count** (u32)
+    - `Offset + 9`: ... Body / Padding ...
+    - `Offset + ~64`: Start of String List (Pascal strings).
+- **Purpose**: Defines the Manifest Keys (strings used for lookup/pages).
 
 ## 3. Container Data Block
 Located between Head End and the Register Signature. contains visual properties.
@@ -38,7 +47,7 @@ Each container block starts with a marker pattern.
 
 | Offset | Type | Value/Name | Description |
 | :--- | :--- | :--- | :--- |
-| `0x00` | `u32` | `03 00 00 00` | **Container Start Marker** |
+| `0x00` | `u32` | `03` or `04` | **Container Marker** (Standard or Text) |
 | `0x04` | `u8` | **Name Len** (N) | Length of cosmetic name. |
 | `0x05` | `char` | **Name** | ASCII String (N bytes). |
 | `0x05+N`| `u32` | **Hash/Pad** | Unknown value (often large/random looking, possibly a hash of the name). |
@@ -52,17 +61,17 @@ Immediately follows the `Hash/Pad` field. Offsets below are relative to the **Co
 | `+04` | `f32` | **X Position** | Lateral position relative to parent? |
 | `+08` | `f32` | **Y Position** | Vertical position. |
 | `+12` | `f32` | **Size/Scale** | Element size or scale factor. |
-| `+16` | `u32` | **Color** | Color code (RGBA or RGB0). |
+| `+16` | | **Color** | **Not fixed**. Located by searching backwards from container end for `1.0f` marker. |
 | `+20` | `byte[44]` | **Reserved** | "Unknown Data" block (44 bytes). Non-zero in some variants. |
-| `+64` | `u32` | **Resource Block Len** | Total size of resource block (observed: 189 = 0xBD). |
-| `+68` | | **Resource Block** | See **Section 3.3** for nested structure. |
+| `+64` | `u32` | **Resource Tag** | Tag `BD 00 00 00` (Start of Resource Property). |
+| `+68` | | **Resource Data** | See **Section 3.3** for dynamic structure. |
 
-### 3.3 Resource Block Structure (Nested)
-The Resource Block at `body+68` has a **nested structure** with an inner length-prefixed string:
+### 3.3 Resource Property (Dynamic)
+The Resource Property is identified by the tag `BD 00 00 00`. It is **not** fixed size.
 
 | Rel Off | Type | Name | Description |
 | :--- | :--- | :--- | :--- |
-| `+0` | `u8[5]` | **Flags** | Always observed as `00 01 00 00 00`. Purpose unknown. |
+| `+0` | `varies` | **Header/Flags** | Variable length header (5-14 bytes). |
 | `+5` | `u8` | **Inner String Len** | Actual string length (0 if empty). |
 | `+6` | `char[N]` | **Resource String** | Texture (.dds) or Font (.bfont) path. |
 | `+6+N` | `byte[]` | **Padding** | Zero-padding to fill block. |
@@ -77,7 +86,7 @@ bd 00 00 00   <- Resource Block Len = 189
 ```
 
 > [!IMPORTANT]
-> The **outer Resource Block Len (189)** is a fixed-size template. The **inner String Len** defines actual content.
+> The **BD** tag identifies the property. The parser scans for this tag and then heuristically finds the string length byte.
 
 ---
 
@@ -104,6 +113,6 @@ bd 00 00 00   <- Resource Block Len = 189
 ## 7. Parsing Strategy (Robustness)
 1.  **Validate Magic**: Check for `00 00 10 40`. Reject or warn on other variants.
 2.  **Register First**: Scan backwards for register signature.
-3.  **Scan Containers**: Find `03 00 00 00` markers, validate IDs against register.
+3.  **Scan Containers**: Find `03` or `04` markers, validate IDs against register.
 4.  **Overlap Handling**: If resource block extends past next container, truncate.
 5.  **Preserve Unknown Data**: Keep 44-byte reserved block intact.

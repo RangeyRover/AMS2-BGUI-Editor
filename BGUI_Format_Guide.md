@@ -8,12 +8,10 @@ This guide details the structure of `.bgui` files, using `display_camaro_gt4r.bg
 ---
 
 ## 1. High-Level Structure
-
-A BGUI file consists of three sequential sections:
-
-1.  **File Header**: Magic signature, Sprite references, and Page Data.
-2.  **Container Definitions**: A linear sequence of UI elements (Containers), defining "what" exists (visual properties, textures).
-3.  **Register**: A hierarchy table at the end of the file, defining "where" elements belong in the tree (Parent/Child relationships).
+1.  **File Header**: Magic signature, Sprite references (01), and Global Project Container (01).
+2.  **Manifest (Container 0)**: String table defining names for subsequent containers.
+3.  **Container Data**: Linear sequence of standard UI elements (03/04).
+4.  **Register**: Hierarchy table at the end (Pre-Order Tree).
 
 ```mermaid
 graph TD
@@ -31,48 +29,39 @@ graph TD
 
 ---
 
-## 2. File Header (Complete Analysis)
+### 2. Header Markers `01 00 00 00`
+It appears the file header often contains two distinct `01` markers before the standard `03/04` containers begin.
 
-The header establishes the file type, loads global resources (Sprite Sheets), and defines Page structures. The breakdown below analyzes the **entire** header block (Wraps from `0x00` to `0x178`).
+**Marker 1: Sprite Pointer**
+- **Type**: `01 00 00 00`
+- **Content**: A string ending in `.bspr` (e.g., `gui\displaysprites6.bspr`).
+- **Role**: Defines the sprite sheet used by the file.
+- **Parser Logic**: Treated as a header property (`Sprite Path`). It is generally NOT registered as a container in the tree (or is strictly a property).
 
-### Full Header Hex Map
+**Marker 2: Project Container (ID:1)**
+- **Type**: `01 00 00 00` (or sometimes followed by a confirmation ID)
+- **Name**: "Container"
+- **Role**: This is the **Root Container** for the project logic, explicitly mapped to **Container ID 1**.
+- **Tree**: It appears in the tree as `ID:1`.
+- **Note**: The parser specifically looks for the string "Container" to distinguish this from the Sprite Pointer.
 
-**Legend**:
-- `[__]` : Magic / Markers
-- `<__>` : Lengths
-- `"__"` : Strings
-- `|__|` : Values/IDs
-- `....` : Unknown/Padding
+---
 
-```text
-Offset    Hex Bytes                                        ASCII             Description
----------------------------------------------------------------------------------------------------------
-00000000  [00 00 10 40] |01 00 00 00| <18> "67 75 69 5C    ...@.....gui\     Magic + SpriteFlag(1) + PathLen(24)
-00000010  64 69 73 70 6C 61 79 73 70 72 69 74 65 73 36     displaysprites6   "gui\displaysprites6.bspr"
-00000020  2E 62 73 70 72" [01 00 00 00 01 00 00 00] <09>   .bspr.........    Sprite Marker + StrLen(9)
-00000030  "43 6F 6E 74 61 69 6E 65 72" E0 26 8B 14 01 00   Container.&.....  "Container" + Unknown Separator
-00000040  00 00 00 00 00 00 00 00 00 00 00 00 00 00 44 00  ..............D.  Padding + Unknowns
-00000050  00 00 44 00 00 00 00 00 00 00 00 00 00 [7A C4]   ..D..........z..  ...
-00000060  00 00 [7A C4] 00 00 7A 44 00 00 7A 44 [03 00     ..z...zD..zD..    "Phantom" Container Start (Marker 03..)
-00000070  00 00] <00> |03 00 00 00| |00 00 00 00| |00 00   ..............    Marker + NameLen(0) + Pad(3) + ID(0)
-00000070  00 FF FF FF FF| 00 00 00 00 00 00 00 00 00 00    ................  X(-NaN/-1) ...
-00000080  00 00 00 00 00 00 00 00 00 44 00 00 00 44 00     .........D...D.   ...
-00000090  00 80 44 00 00 80 44 0F 00 00 00 02 00 00 00     ..D...D.........  ...
-000000A0  02 00 00 00 00 00 80 3F 01 00 00 00 02 00 00     .......?........  ...
-000000B0  00 <04> "70 61 67 65" 28 E1 2D F6 01 00 00 00    ....page(.-.....  Page Def: "page"
-000000C0  00 00 00 00 <0A> "55 6E 61 73 73 69 67 6E 65     ..........Unassi  Page Name: "Unassigned"
-000000D0  64" 3C CD 1B 9C 01 00 00 00 00 00 00 00 01 00    gned<...........  ...
-000000E0  00 00 01 00 00 00 <04> "70 61 67 65" 28 E1 2D    .......page(.-..  Page Def: "page"
-000000F0  F6 02 00 00 00 00 00 00 00 00 00 00 00 00 00     ................  ...
-00000100  00 00 00 00 00 00 00 00 00 00 00 01 00 00 00     ................  ...
-00000110  00 00 00 00 00 00 00 00 0E 00 00 00 00 00 00     ................  ...
-00000120  00 00 00 00 00 00 00 00 00 00 00 00 01 00 00     ................  ...
-00000130  00 <18> "66 6F 6E 74 5F 61 72 69 65 73 5F 73     ......font_aries_s  Default Font Resource
-00000140  6D 61 6C 6C 5F 44 45 46 41 55 4C 54" 75 48 D8    mall_DEFAULTuH..  "font_aries_small_DEFAULT"
-00000150  46 00 00 00 00 AE 47 E1 3E CD CC 0C 3F CD CC     F.....G.>...?..   ...
-00000160  CC 3E D7 A3 F0 3E 8F C2 F5 3E B8 1E 05 3F 00     .>...>...>...?..  ...
-00000170  00 00 FF 00 00 00 00 CD CC 0C 3F                 ...........?      End of Header Block
-```
+### 3. Container 0: The Manifest (String Table)
+Immediately following the header (often the first `03` marker) is a special container.
+
+- **Marker**: `03 00 00 00`
+- **Name Length**: `0` (Byte at Offset + 4 is `00`)
+- **ID**: `0`
+- **String Count**: Located at **Offset + 5** (as a u32).
+- **Content**: A list of Pascal-style strings (1-byte length followed by string).
+- **Function**: Acts as a lookup table (Manifest) for page keys or shared strings.
+- **Parser Logic**: Identified by `ID=0`. Children of this node in the Register are the Manifest entries.
+    *   **Strings**: Sequence of `[Len (u8)] [String]` entries.
+    *   **Correlation**: These strings correspond 1:1 to the Names of subsequent containers (e.g., `page1` here maps to a later container named `Page 1`).
+
+> [!NOTE]
+> This Manifest (C0) explains the "Phantom Container" noted earlier. It is a valid container (ID 0) but serves as a lookup table rather than a visual element.
 
 ### Detailed Field Breakdown
 
@@ -112,7 +101,34 @@ We will examine **Container ID 4** (`display_generic_light_off`), located at off
 | `0x04` | `19` | **Name Len** | 25 bytes (`0x19`). |
 | `0x05` | `64 69 73 ...` | **Name** | `"display_generic_light_off"` |
 | `...` | `...` | | |
-| `NameEnd` | `98 81 46 1E` | **Hash/Pad** | Unknown hash or padding. |
+| `NameEnd` | `98 81 46 1E` | **Hash/Pad** | Unknown
+
+### 4. Container Structure
+Containers are the main building blocks of the UI. They are stored sequentially before the Register.
+
+#### Marker Types
+- **`03 00 00 00`**: Standard Container (Image, Group, Panel)
+- **`04 00 00 00`**: Text/Font Container
+
+| Offset | Size | Type | Description |
+| :--- | :--- | :--- | :--- |
+| `+0` | 4 | `u32` | **Marker** (`03` or `04`) |
+| `+4` | 1 | `u8` | **Name Length** |
+| `+5` | N | `char` | **Name String** (ASCII) |
+| `+5+N` | 4 | `bytes` | **Padding/Hash**. Usually `00`s but can contain data. |
+| `+9+N` | - | - | **Body Start** (Start of `BguiContainer` struct) |
+
+#### Body Structure (Common)
+All containers appear to share the same body property layout starting after the padding:
+
+| Body Offset | Size | Type | Description |
+| :--- | :--- | :--- | :--- |
+| `+0` | 4 | `u32` | **Container ID** (Referenced by Register) |
+| `+4` | 4 | `float` | **X Position** |
+| `+8` | 4 | `float` | **Y Position** |
+| `+12` | 4 | `float` | **Width/Size** |
+| `...` | ... | ... | ... |
+| `Ends` | 4 | `u32` | **00 00 80 3F** marker (1.0f) near end |
 
 #### B. Container Body (Properties)
 Located immediately after the Name and Hash.
@@ -122,14 +138,14 @@ Located immediately after the Name and Hash.
 | **`+04`** | `04 00 00 00` | **ID: 4** | **CRITICAL LINK**: Matches Register ID. |
 | `+08` | `00 00 80 BF` | **X: -1.0** | X Position. |
 | `+0C` | `00 00 20 41` | **Y: 10.0** | Y Position. |
-| `+10` | `00 00 30 42` | **Size: 44.0** | Size/Scale. |
-| `+14` | `00 00 30 42` | **Color** | Color Mask (RGBA/Value). |
+| `+10` | `00 00 30 42` | **Width: 44.0** | Width. |
+| `+14` | `00 00 30 42` | **Height: 44.0** | Height. (Previously mistaken for Color). |
 | `+18` | `00 ...` | **Unknown** | 44 bytes of reserved/unknown data. |
-| `+64` | `BD 00 00 00` | **Res Len** | **189 bytes**. Length of Resource Block. |
+| `+64` | `BD 00 00 00` | **Unknown** | . Start of Resource Block.
 
-#### C. Resource Block (The 189-Byte Section)
+#### C. Resource Block 
 
-The **Resource Block** is a fixed-size structure located at `Body + 64`. It is **always 189 bytes** (`0xBD`) long. It typically contains the texture (`.dds`) or font (`.bfont`) path.
+The **Resource Property** is a dynamic tagged property (`BD`) scanned within the container. The **Container Color** is stored at the end of the container, separately.
 
 **Hex Map Example (from `display_generic_light_off`)**
 start offset: `0x373`
@@ -137,27 +153,55 @@ start offset: `0x373`
 ```text
 Offset    Hex Bytes                                        ASCII             Description
 -------------------------------------------------------------------------------------------------------
-00000373  [BD 00 00 00] [00 01 00 00 00] <1D> "64 69 73    .............dis  TotalLen(189) + Flags(5) + StrLen(29)
-00000380  70 6C 61 79 5F 67 65 6E 65 72 69 63 5F 6C 69     play_generic_li   "display_generic_li...
-00000390  67 68 74 5F 6F 66 66 2E 64 64 73" 00 00 00 00    ght_off.dds.....  ...ght_off.dds" + Padding Start
-000003A0  00 00 00 00 80 3F 00 00 80 3F 00 00 00 00 00     .....?...?.....   Padding / Garbage Data...
-000003B0  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00     ...............   ...
-...       (Padding continues for remainder of 189 bytes)
-00000430  (Next Container Marker usually follows shortly after)
+00000373  BD 00 00 00                                      ....              Property ID = 0xBD (Resource Property)
+00000377  01 00 00 01                                      ....              Property header / flags (variable, format-specific)
+0000037B  1D                                               .                 Resource string length = 0x1D (29 bytes)
+0000037C  64 69 73 70 6C 61 79 5F 67 65 6E 65 72 69 63     display_generic   Resource string (ASCII)
+0000038C  5F 6C 69 67 68 74 5F 6F 66 66 2E 64 64 73        _light_off.dds    End of resource string (29 bytes total)
+000003A9  00 00 00 00                                      ....              Padding / alignment
+000003AD  80 3F                                            .?                Float 1.0 marker (LE)
+000003AF  00 00                                            ..                Padding
+000003B1  80 3F                                            .?                Additional float 1.0 marker
+000003B3  00 00 00 00 00                                   .....             Padding / unknown container data
+000003B8  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00     ...............   Padding / unused bytes
+000003C7  FF FF FF FF                                      ....              Unknown / sentinel value 
+### 5. Hierarchical Bounds Logic
+The BGUI file layout is **flat** (sequential list of containers). The hierarchy is defined purely by the **Register** at the end of the file.
+- **Problem**: A container (e.g., ID:1) might be physically located in the header, while its children (ID:2...) are located thousands of bytes later, separated by other containers (like the Manifest).
+- **Solution**: To correctly highlight a container's "bounds", one must calculate the **Min Start** and **Max End** of **all containers in its logical subtree**.
+    - `Start = Min(MarkerOffset of all descendants)`
+    - `End = Max(EndOffset of all descendants)`
+...       ...
+000003E0  00 00 00 00 00 FF FF FF FF  00 00 80 3F 00 00 00 00   ...........?....  **Container Colour**: RGB stored at offsets `0x3E6–0x3E8` (three bytes immediately before the final `00 00 80 3F` marker, little-endian float `1.0`), which terminates the colour definition for this container.
+...       ...                                              ...               Padding / additional container data
+00000430  (Next container marker typically follows nearby)                   End of this container’s data region
 ```
 
 **Structure Breakdown**:
 
 | Offset (Rel) | Size | Example | Description |
 | :--- | :--- | :--- | :--- |
-| **`+0`** | `u32` | `BD 00 00 00` | **Block Length**. Always 189 (`0xBD`). |
-| **`+4`** | `u8[5]` | `00 01 00 00 00` | **Flags**. Standard pattern seen in almost all files. |
-| **`+9`** | `u8` | `1D` (29) | **Inner String Length**. Length of the resource path. |
-| **`+10`** | `char[]` | `"display..dds"` | **Resource Path**. The actual string. |
-| **`+10+N`** | `bytes` | `00...` | **Padding**. Fills the remainder of the 189-byte block. |
+| **`+0`** | `u32` | `BD 00 00 00` | **Tag Property**. Tag `BD` (Dynamic Size). |
+| **`+4`** | `varies` | `00 01 ...` | **Header/Flags**. Variable Size. |
+| **`+9`** | `u8` | `1D` (29) | **Inner String Length**. |
+| **`+10`** | `char[]` | `"display.."` | **Resource Path**. |
+| **`+10+N`** | `bytes` | `00...` | **Padding**. |
 
 > [!IMPORTANT]
-> Because this block is fixed at 189 bytes, usually there is significant padding after the string. The next container marker will be found strictly after `Start + 189` bytes.
+> **Color Location Rule**: The Color is **NOT** at a fixed offset. It must be found by searching **BACKWARDS** from the **End of the Container** (defined by the next marker) for the `00 00 80 3F` marker.
+>
+> **Color is the 3 bytes (RGB) immediately BEFORE this marker.**
+>
+> There are multiple `00 00 80 3F` markers in a container - the **LAST** one (closest to container end) has the color.
+>
+> Example hex pattern (from container ID 15 at 0xE00):
+> ```
+> ... FF D3 9F 10 00 00 80 3F ...
+>        ^^^^^^^^ ^^^^^^^^^^^
+>        RGB      1.0f marker
+> ```
+>
+> The parser searches **backwards** (using `rfind`) within the container body for `00 00 80 3F` and reads the 3 preceding bytes as R, G, B.
 
 #### D. Detailed Container Example (RPMbarContainer)
 
